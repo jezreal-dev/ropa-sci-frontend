@@ -1,0 +1,26 @@
+[
+  {
+    "FirstName": "Jezreal",
+    "LastName": "Momoh",
+    "Username": "Jmomoh",
+    "State": "Edo",
+    "Email": "Jezreal41@gmail.com",
+    "Role": "player",
+    "Wins": 0,
+    "Losses": 0,
+    "Ties": 0,
+    "TotalMatches": 0
+  },
+  {
+    "FirstName": "Acfnow",
+    "LastName": "Now",
+    "Username": "ee",
+    "State": "Abia",
+    "Email": "ademicea@gmai.com",
+    "Role": "player",
+    "Wins": 0,
+    "Losses": 0,
+    "Ties": 0,
+    "TotalMatches": 0
+  }
+]
