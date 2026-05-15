@@ -9,7 +9,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"ropa-sci-frontend/models"
+	"ropa-sci-frontend/bubbletea/models"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
