@@ -1,4 +1,4 @@
-module ropa-sci-frontend
+module ropa-sci-frontend/bubbletea
 
 go 1.26.2
 
