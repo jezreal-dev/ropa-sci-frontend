@@ -10,6 +10,7 @@ import (
 	"golang.org/x/text/language"
 
 	"ropa-sci-frontend/bubbletea/models"
+	"ropa-sci-frontend/bubbletea/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -576,82 +577,83 @@ func banner(termWidth int) string {
 
 // renderWelcome draws the landing screen with register/login/quit options
 func renderWelcome(m model) string {
-	options := []string{
-		"Register — I am new",
-		"Sign In  — I have an account",
-		"Quit",
-	}
-	s := banner(m.state.TermWidth) // ← replaces the hardcoded ASCII block
-	s += "\n"
-	for i, opt := range options {
-		cursor := "  "
-		if m.state.Cursor == i {
-			cursor = "> "
-		}
-		s += "  " + cursor + opt + "\n"
-	}
-	s += "\n  ↑/↓ to move · Enter to select · ctrl+c to quit"
-	if m.state.FormError != "" {
-		s += "\n\n  ⚠  " + m.state.FormError
-	}
-	return s
+    options := []string{
+        "Register — I am new",
+        "Sign In  — I have an account",
+        "Quit",
+    }
+
+    // Banner — purple on wide terminals, plain text on narrow
+    s := ui.BannerStyle.Render(banner(m.state.TermWidth)) + "\n"
+
+    for i, opt := range options {
+        if m.state.Cursor == i {
+            s += ui.SelectedStyle.Render("  > " + opt) + "\n"
+        } else {
+            s += ui.MutedStyle.Render("    " + opt) + "\n"
+        }
+    }
+
+    s += "\n" + ui.Footer("↑/↓ to move · Enter to select · ctrl+c to quit")
+
+    if m.state.FormError != "" {
+        s += "\n\n" + ui.ErrorLine(m.state.FormError)
+    }
+    return s
 }
 
 // renderLogin draws the sign-in screen with a live username input
-func renderLogin(m model) string {
-	s := "\n  SIGN IN\n\n"
-	s += "  Enter your Gitea username: " + m.state.InputBuffer + "_\n"
-	if m.state.FormError != "" {
-		s += "\n  ⚠  " + m.state.FormError + "\n"
-	}
-	s += "\n  Enter to confirm · Esc to go back · ctrl+c to quit"
-	return s
-}
-
-// renderRegister draws the multi-field registration form with live validation feedback
 func renderRegister(m model) string {
-	fields := []string{
-		"First Name",
-		"Last Name ",
-		"Username  ",
-		"State     ",
-		"Email     ",
-	}
-	values := []string{
-		m.state.Player.FirstName,
-		m.state.Player.LastName,
-		m.state.Player.Username,
-		m.state.Player.State,
-		emailDisplay(m.state.Player.Email),
-	}
-	s := banner(m.state.TermWidth) // ← replaces the hardcoded ASCII block
-	s += "\n  REGISTER — Create your account\n\n"
+    fields := []string{
+        "First Name",
+        "Last Name ",
+        "Username  ",
+        "State     ",
+        "Email     ",
+    }
+    values := []string{
+        m.state.Player.FirstName,
+        m.state.Player.LastName,
+        m.state.Player.Username,
+        m.state.Player.State,
+        emailDisplay(m.state.Player.Email),
+    }
 
-	// rest of the function is unchanged from here down
-	for i, field := range fields {
-		if i == m.state.ActiveField {
-			s += "  > " + field + ": " + m.state.InputBuffer + "_\n"
-		} else if values[i] != "" {
-			s += "    " + field + ": " + values[i] + " ✓\n"
-		} else {
-			s += "    " + field + ": \n"
-		}
-	}
-	if m.state.ActiveField == 3 && len(m.state.StateSuggestions) > 0 {
-		s += "\n  Suggestions: "
-		for _, state := range m.state.StateSuggestions {
-			s += state.Name + " (" + state.Abbreviation + ")  "
-		}
-		s += "\n"
-	}
-	if m.state.FormError != "" {
-		s += "\n  ⚠  " + m.state.FormError + "\n"
-	}
-	if m.state.ActiveField == 4 {
-		s += "\n  Email is optional — press Enter to skip\n"
-	}
-	s += "\n  Enter to confirm field · Esc to go back · ctrl+c to quit"
-	return s
+    s := ui.BannerStyle.Render(banner(m.state.TermWidth))
+    s += "\n" + ui.TitleStyle.Render("  REGISTER — Create your account") + "\n\n"
+
+    for i, field := range fields {
+        if i == m.state.ActiveField {
+            // Active field — purple, bold, cursor
+            s += ui.SelectedStyle.Render("  > "+field+": ") +
+                m.state.InputBuffer + "_\n"
+        } else if values[i] != "" {
+            // Completed field — green checkmark
+            s += ui.MutedStyle.Render("    "+field+": ") +
+                values[i] + " " + ui.Checkmark() + "\n"
+        } else {
+            // Future field — dimmed
+            s += ui.MutedStyle.Render("    "+field+": \n")
+        }
+    }
+
+    // Live state suggestions
+    if m.state.ActiveField == 3 && len(m.state.StateSuggestions) > 0 {
+        s += "\n" + ui.InfoStyle.Render("  Suggestions: ")
+        for _, state := range m.state.StateSuggestions {
+            s += ui.DimStyle.Render(state.Name+" ("+state.Abbreviation+")  ")
+        }
+        s += "\n"
+    }
+
+    if m.state.FormError != "" {
+        s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
+    }
+    if m.state.ActiveField == 4 {
+        s += "\n" + ui.WarningStyle.Render("  Email is optional — press Enter to skip") + "\n"
+    }
+    s += "\n" + ui.Footer("Enter to confirm field · Esc to go back · ctrl+c to quit")
+    return s
 }
 
 // emailDisplay safely dereferences an optional email pointer for display
@@ -662,24 +664,39 @@ func emailDisplay(email *string) string {
 	return *email
 }
 
+func renderLogin(m model) string {
+    s := ui.BannerStyle.Render(banner(m.state.TermWidth))
+    s += "\n" + ui.TitleStyle.Render("  SIGN IN — Enter your username") + "\n\n"
+    s += ui.SelectedStyle.Render("  > Username: ") + m.state.InputBuffer + "_\n"
+
+    if m.state.FormError != "" {
+        s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
+    }
+    s += "\n" + ui.Footer("Enter to sign in · Esc to go back · ctrl+c to quit")
+    return s
+}
+
 // renderMenu draws the main game menu with a personalised greeting
 func renderMenu(m model) string {
-	options := []string{
-		"Single Player",
-		"Multiplayer",
-		"Quit",
-	}
-	menu := "\n  ROPA-SCI — Welcome, " + m.state.Player.FirstName + "!\n\n"
-	for i, option := range options {
-		cursor := "  "
-		if m.state.Cursor == i {
-			cursor = "> "
-		}
-		menu += "  " + cursor + option + "\n"
-	}
-	menu += "\n  ↑/↓ or k/j to move · Enter to select · Esc to quit"
-	return menu
+    options := []string{
+        "Single Player",
+        "Multiplayer",
+        "Quit",
+    }
+    s := "\n" + ui.TitleStyle.Render("  ROPA-SCI") + "\n"
+    s += ui.DimStyle.Render("  Welcome, "+m.state.Player.FirstName+"!") + "\n\n"
+
+    for i, option := range options {
+        if m.state.Cursor == i {
+            s += ui.SelectedStyle.Render("  > " + option) + "\n"
+        } else {
+            s += ui.MutedStyle.Render("    " + option) + "\n"
+        }
+    }
+    s += "\n" + ui.Footer("↑/↓ or k/j · Enter to select · Esc to quit")
+    return s
 }
+
 
 // ─── Game Screen ──────────────────────────────────────────────────────────────
 
@@ -859,50 +876,43 @@ func renderReveal(m model) string {
 
 // renderResult shows the round outcome, score bar, and contextual next-step prompt
 func renderResult(m model) string {
-	s := ""
-	switch m.state.RoundOutcome {
-	case "win":
-		s += "  🏆  YOU WIN THIS ROUND!  🏆\n"
-		s += "  ╔═══════════════════════════════╗\n"
-		s += "  ║                               ║\n"
-		s += "  ║  " + padCenter(outcomeMessage(m.state.PlayerMove, m.state.AIMove), 29) + "  ║\n"
-		s += "  ║                               ║\n"
-		s += "  ╚═══════════════════════════════╝\n"
-	case "lose":
-		s += "  💀  AI WINS THIS ROUND...  💀\n"
-		s += "  ╔═══════════════════════════════╗\n"
-		s += "  ║                               ║\n"
-		s += "  ║  " + padCenter(outcomeMessage(m.state.PlayerMove, m.state.AIMove), 29) + "  ║\n"
-		s += "  ║                               ║\n"
-		s += "  ╚═══════════════════════════════╝\n"
-	case "tie":
-		s += "  🤝  DRAW!  🤝\n"
-		s += "  ╔═══════════════════════════════╗\n"
-		s += "  ║                               ║\n"
-		s += "  ║  " + padCenter(outcomeMessage(m.state.PlayerMove, m.state.AIMove), 29) + "  ║\n"
-		s += "  ║                               ║\n"
-		s += "  ╚═══════════════════════════════╝\n"
-	}
+    s := ""
+    var boxContent string
 
-	s += "\n  " + scoreBar(m.state.Score.PlayerWins, m.state.Score.OpponentWins) + "\n"
+    switch m.state.RoundOutcome {
+    case "win":
+        s += ui.SuccessStyle.Render("  🏆  YOU WIN THIS ROUND!  🏆") + "\n\n"
+        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+        s += "  " + ui.WinBoxStyle.Render(boxContent) + "\n"
+    case "lose":
+        s += ui.DangerStyle.Render("  💀  AI WINS THIS ROUND...  💀") + "\n\n"
+        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+        s += "  " + ui.LoseBoxStyle.Render(boxContent) + "\n"
+    case "tie":
+        s += ui.WarningStyle.Render("  🤝  DRAW!  🤝") + "\n\n"
+        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+        s += "  " + ui.TieBoxStyle.Render(boxContent) + "\n"
+    }
 
-	if m.state.Score.PlayerWins == 2 {
-		s += "\n  🎉  YOU WIN THE MATCH!  🎉\n"
-		s += "\n  Enter to play again · Esc for menu\n"
-	} else if m.state.Score.OpponentWins == 2 {
-		s += "\n  💀  AI wins the match. Better luck next time.\n"
-		s += "\n  Enter to play again · Esc for menu\n"
-	} else {
-		switch m.state.RoundOutcome {
-		case "win":
-			s += "\n  Enter for next round · Esc for menu\n"
-		case "lose":
-			s += "\n  Enter to fight back · Esc for menu\n"
-		case "tie":
-			s += "\n  Enter to break the tie · Esc for menu\n"
-		}
-	}
-	return s
+    s += "\n  " + scoreBar(m.state.Score.PlayerWins, m.state.Score.OpponentWins) + "\n"
+
+    if m.state.Score.PlayerWins == 2 {
+        s += "\n" + ui.SuccessStyle.Render("  🎉🎉  YOU WIN THE MATCH!  🎉🎉") + "\n"
+        s += "\n" + ui.Footer("Enter to play again · Esc for menu")
+    } else if m.state.Score.OpponentWins == 2 {
+        s += "\n" + ui.DangerStyle.Render("  💀  AI wins the match. Better luck next time.") + "\n"
+        s += "\n" + ui.Footer("Enter to play again · Esc for menu")
+    } else {
+        switch m.state.RoundOutcome {
+        case "win":
+            s += "\n" + ui.Footer("Enter for next round · Esc for menu")
+        case "lose":
+            s += "\n" + ui.Footer("Enter to fight back · Esc for menu")
+        case "tie":
+            s += "\n" + ui.Footer("Enter to break the tie · Esc for menu")
+        }
+    }
+    return s
 }
 
 // ─── Render Utilities ─────────────────────────────────────────────────────────
@@ -910,23 +920,15 @@ func renderResult(m model) string {
 // scoreBar renders a visual two-pip progress bar for the current match score
 // e.g.  You: █░  AI: ░░
 func scoreBar(playerWins, aiWins int) string {
-	bar := "You: "
-	for i := 0; i < 2; i++ {
-		if i < playerWins {
-			bar += "█"
-		} else {
-			bar += "░"
-		}
-	}
-	bar += "  AI: "
-	for i := 0; i < 2; i++ {
-		if i < aiWins {
-			bar += "█"
-		} else {
-			bar += "░"
-		}
-	}
-	return bar
+    bar := ui.DimStyle.Render("You: ")
+    for i := 0; i < 2; i++ {
+        bar += ui.ScorePip(i < playerWins)
+    }
+    bar += ui.DimStyle.Render("  AI: ")
+    for i := 0; i < 2; i++ {
+        bar += ui.ScorePip(i < aiWins)
+    }
+    return bar
 }
 
 // padCenter centres a string within a fixed width by adding spaces on both sides
@@ -947,48 +949,39 @@ func renderMultiMenu(m model) string {
         "Quick Match  — find any opponent",
         "Back",
     }
-    s := "\n  MULTIPLAYER\n\n"
-    s += "  Choose how you want to play:\n\n"
+    s := "\n" + ui.TitleStyle.Render("  MULTIPLAYER") + "\n\n"
+    s += ui.DimStyle.Render("  Choose how you want to play:") + "\n\n"
     for i, opt := range options {
-        cursor := "  "
         if m.state.Cursor == i {
-            cursor = "> "
+            s += ui.SelectedStyle.Render("  > " + opt) + "\n"
+        } else {
+            s += ui.MutedStyle.Render("    " + opt) + "\n"
         }
-        s += "  " + cursor + opt + "\n"
     }
-    s += "\n  ↑/↓ to move · Enter to select · Esc for menu"
+    s += "\n" + ui.Footer("↑/↓ to move · Enter to select · Esc for menu")
     return s
 }
-
 // renderCreateRoom draws the room code waiting screen
 func renderCreateRoom(m model) string {
     spinner := spinnerFrames[m.state.SpinnerFrame]
-    s := "\n  CREATE ROOM\n\n"
-    s += "  ╔══════════════════════════════╗\n"
-    s += "  ║                              ║\n"
-    s += "  ║   Your room code:            ║\n"
-    s += "  ║                              ║\n"
-    s += "  ║      " + m.state.RoomCode + "              ║\n"
-    s += "  ║                              ║\n"
-    s += "  ╚══════════════════════════════╝\n"
-    s += "\n  Share this code with your opponent.\n"
-    s += "\n  " + spinner + "  Waiting for opponent to join...\n"
-    s += "\n  Esc to cancel · ctrl+c to quit"
+    s := "\n" + ui.TitleStyle.Render("  CREATE ROOM") + "\n\n"
+    roomContent := ui.TitleStyle.Render("Your room code:\n\n") +
+        ui.SuccessStyle.Render("  "+m.state.RoomCode)
+    s += "  " + ui.RoomCodeBoxStyle.Render(roomContent) + "\n"
+    s += "\n" + ui.DimStyle.Render("  Share this code with your opponent.") + "\n"
+    s += "\n" + ui.DimStyle.Render("  "+spinner+"  Waiting for opponent to join...") + "\n"
+    s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
     return s
 }
 
 // renderQuickMatch draws the auto matchmaking waiting screen
 func renderQuickMatch(m model) string {
     spinner := spinnerFrames[m.state.SpinnerFrame]
-    s := "\n  QUICK MATCH\n\n"
-    s += "  " + spinner + "  Searching for an opponent...\n\n"
-    s += "  ╔══════════════════════════════╗\n"
-    s += "  ║                              ║\n"
-    s += "  ║   This may take a moment.    ║\n"
-    s += "  ║   Stay in the terminal!      ║\n"
-    s += "  ║                              ║\n"
-    s += "  ╚══════════════════════════════╝\n"
-    s += "\n  Esc to cancel · ctrl+c to quit"
+    s := "\n" + ui.TitleStyle.Render("  QUICK MATCH") + "\n\n"
+    s += ui.DimStyle.Render("  "+spinner+"  Searching for an opponent...") + "\n\n"
+    waitContent := ui.DimStyle.Render("This may take a moment.\nStay in the terminal!")
+    s += "  " + ui.WaitingBoxStyle.Render(waitContent) + "\n"
+    s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
     return s
 }
 
