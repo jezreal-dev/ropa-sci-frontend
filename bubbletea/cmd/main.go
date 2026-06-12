@@ -13,6 +13,7 @@ import (
 	"ropa-sci-frontend/bubbletea/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ─── Spinner & AI message types ───────────────────────────────────────────────
@@ -107,7 +108,7 @@ func initialModel() model {
 			Screen: "welcome",
 			Score:  models.MatchScore{Round: 1},
 			Cursor: 0,
-			Phase:  "pick",
+			Phase:  models.PhasePick,
 		},
 	}
 }
@@ -134,7 +135,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Spinner tick — advances the animation frame during AI think phase ──
 	case spinnerTickMsg:
 		m.state.SpinnerFrame = (m.state.SpinnerFrame + 1) % len(spinnerFrames)
-		if m.state.Phase == "think" ||
+		if m.state.Phase == models.PhaseThink ||
 			m.state.Screen == "create-room" ||
 			m.state.Screen == "quick-match" {
 			return m, spinnerTick()
@@ -144,7 +145,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── AI decided — transition from think to reveal, then schedule result ──
 	case aiDecidedMsg:
 		m.state.AIMove = msg.move
-		m.state.Phase = "reveal"
+		m.state.Phase = models.PhaseReveal
 		m.state.RoundOutcome = calculateOutcome(m.state.PlayerMove, msg.move)
 		// Brief pause so the player can see both cards before the verdict
 		return m, tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
@@ -153,34 +154,98 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Show result — update score and transition to result phase ──
 	case showResultMsg:
-    m.state.Phase = "result"
-    switch m.state.RoundOutcome {
-    case "win":
-        m.state.Score.PlayerWins++
-    case "lose":
-        m.state.Score.OpponentWins++
-    }
-    m.state.Score.Round++
+		m.state.Phase = models.PhaseResult
+		switch m.state.RoundOutcome {
+		case "win":
+			m.state.Score.PlayerWins++
+		case "lose":
+			m.state.Score.OpponentWins++
+		}
+		m.state.Score.Round++
 
-    // Check if match is over and update lifetime stats
-    if m.state.Score.PlayerWins == 2 || m.state.Score.OpponentWins == 2 {
-        m.state.Player.TotalMatches++
-        if m.state.Score.PlayerWins == 2 {
-            m.state.Player.Wins++
-        } else {
-            m.state.Player.Losses++
-        }
-        // Save updated stats to disk — ignore error silently in UI
-        // player will still see correct stats this session
-        _ = models.UpdatePlayer(m.state.Player)
-    }
-    return m, nil
+		// Check if match is over and update lifetime stats
+		if m.state.Score.PlayerWins == 2 || m.state.Score.OpponentWins == 2 {
+			m.state.Player.TotalMatches++
+			if m.state.Score.PlayerWins == 2 {
+				m.state.Player.Wins++
+			} else {
+				m.state.Player.Losses++
+			}
+			// Save updated stats to disk — ignore error silently in UI
+			// player will still see correct stats this session
+			_ = models.UpdatePlayer(m.state.Player)
+		}
+		return m, nil
 
-	// ── Mouse clicks — coordinate mapping wired in Week 7 polish phase ──
+	// ── Mouse clicks — coordinate mapping for menu and game screens ──
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			_ = msg.X
-			_ = msg.Y
+			switch m.state.Screen {
+
+			// Welcome screen — click highlights a menu option
+			case "welcome":
+				offset := 8 // wide banner (ASCII art) ends at Y=7, options start at Y=8
+				if m.state.TermWidth < 70 {
+					offset = 3 // narrow banner is just text
+				}
+				idx := msg.Y - offset
+				if idx >= 0 && idx < 3 {
+					m.state.Cursor = idx
+				}
+
+			// Main menu — title + greeting + blank = 4 lines of header
+			case "menu":
+				idx := msg.Y - 4
+				if idx >= 0 && idx < 3 {
+					m.state.Cursor = idx
+				}
+
+			// Multiplayer menu — title + subtitle + blanks = 5 lines of header
+			case "multi-menu":
+				idx := msg.Y - 5
+				if idx >= 0 && idx < 3 {
+					m.state.Cursor = idx
+				}
+
+			// Game screen — click on a card to play it immediately
+			case "game":
+				if m.state.Phase == models.PhasePick {
+					if m.state.TermWidth >= 60 {
+						// Wide layout: cards are ~15 chars wide, joined side-by-side
+						// Card 0: X ≈ 2..16, Card 1: X ≈ 19..33, Card 2: X ≈ 36..50
+						cardIdx := -1
+						if msg.X >= 2 && msg.X <= 16 {
+							cardIdx = 0
+						} else if msg.X >= 19 && msg.X <= 33 {
+							cardIdx = 1
+						} else if msg.X >= 36 && msg.X <= 50 {
+							cardIdx = 2
+						}
+						if cardIdx >= 0 && msg.Y >= 5 && msg.Y <= 12 {
+							m.state.PlayerMove = indexToMove(cardIdx)
+							m.state.Phase = models.PhaseThink
+							return m, tea.Batch(spinnerTick(), aiThink())
+						}
+					} else {
+						// Narrow layout: cards stacked at Y=5,6,7
+						idx := msg.Y - 5
+						if idx >= 0 && idx < 3 {
+							m.state.Cursor = idx
+						}
+					}
+				}
+				// Click anywhere during result phase advances to next round
+				if m.state.Phase == models.PhaseResult {
+					if m.state.Score.PlayerWins == 2 || m.state.Score.OpponentWins == 2 {
+						m.state.Score = models.MatchScore{Round: 1}
+					}
+					m.state.Phase = models.PhasePick
+					m.state.PlayerMove = models.None
+					m.state.AIMove = models.None
+					m.state.RoundOutcome = ""
+					m.state.Cursor = 0
+				}
+			}
 		}
 
 	// ── Keyboard input ──────────────────────────────────────────────────────
@@ -219,7 +284,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.Cursor = 0
 			case "game", "waiting":
 				m.state.Screen = "menu"
-				m.state.Phase = "pick"
+				m.state.Phase = models.PhasePick
 				m.state.Cursor = 0
 				m.state.FormError = ""
 
@@ -236,7 +301,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.Screen = "menu"
 				m.state.Cursor = 0
 				m.state.Score = models.MatchScore{Round: 1}
-				m.state.Phase = "pick"
+				m.state.Phase = models.PhasePick
+			case "help":
+				// Return to wherever the user came from — preserve cursor position
+				m.state.Screen = m.state.PreviousScreen
 			}
 
 		// Menu cursor — up arrow and vim-style k
@@ -253,37 +321,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Game card cursor — left arrow and vim-style h
 		case "left", "h":
-			if m.state.Screen == "game" && m.state.Phase == "pick" && m.state.Cursor > 0 {
+			if m.state.Screen == "game" && m.state.Phase == models.PhasePick && m.state.Cursor > 0 {
 				m.state.Cursor--
 			}
 
 		// Game card cursor — right arrow and vim-style l
 		case "right", "l":
-			if m.state.Screen == "game" && m.state.Phase == "pick" && m.state.Cursor < 2 {
+			if m.state.Screen == "game" && m.state.Phase == models.PhasePick && m.state.Cursor < 2 {
 				m.state.Cursor++
 			}
 
 		// Direct move shortcuts — Rock
 		case "1", "r":
-			if m.state.Screen == "game" && m.state.Phase == "pick" {
+			if m.state.Screen == "game" && m.state.Phase == models.PhasePick {
 				m.state.PlayerMove = models.Rock
-				m.state.Phase = "think"
+				m.state.Phase = models.PhaseThink
 				return m, tea.Batch(spinnerTick(), aiThink())
 			}
 
 		// Direct move shortcuts — Paper
 		case "2", "p":
-			if m.state.Screen == "game" && m.state.Phase == "pick" {
+			if m.state.Screen == "game" && m.state.Phase == models.PhasePick {
 				m.state.PlayerMove = models.Paper
-				m.state.Phase = "think"
+				m.state.Phase = models.PhaseThink
 				return m, tea.Batch(spinnerTick(), aiThink())
 			}
 
 		// Direct move shortcuts — Scissors
 		case "3", "s":
-			if m.state.Screen == "game" && m.state.Phase == "pick" {
+			if m.state.Screen == "game" && m.state.Phase == models.PhasePick {
 				m.state.PlayerMove = models.Scissors
-				m.state.Phase = "think"
+				m.state.Phase = models.PhaseThink
 				return m, tea.Batch(spinnerTick(), aiThink())
 			}
 
@@ -321,6 +389,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state.FormError = "First name must be a single word"
 						return m, nil
 					}
+					if errMsg := models.ValidateName(input); errMsg != "" {
+						m.state.FormError = errMsg
+						return m, nil
+					}
 					m.state.Player.FirstName = caser.String(strings.ToLower(input)) // normalise then capitalise
 					m.state.ActiveField++
 					m.state.InputBuffer = ""
@@ -331,14 +403,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state.FormError = "Last name must be a single word"
 						return m, nil
 					}
+					if errMsg := models.ValidateName(input); errMsg != "" {
+						m.state.FormError = errMsg
+						return m, nil
+					}
 					m.state.Player.LastName = caser.String(strings.ToLower(input)) // normalise then capitalise
 					m.state.ActiveField++
 					m.state.InputBuffer = ""
 					m.state.FormError = ""
 
 				case 2: // Username
-					if len(strings.Fields(input)) != 1 {
-						m.state.FormError = "Username must be a single word — no spaces"
+					if errMsg := models.ValidateUsername(strings.ToLower(input)); errMsg != "" {
+						m.state.FormError = errMsg
 						return m, nil
 					}
 					if models.UsernameExists(strings.ToLower(input)) {
@@ -406,7 +482,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state.PreviousScreen = "menu"
 					m.state.Screen = "game"
 					m.state.GameMode = "single"
-					m.state.Phase = "pick"
+					m.state.Phase = models.PhasePick
 					m.state.Score = models.MatchScore{Round: 1}
 				case 1:
 					m.state.PreviousScreen = "menu"
@@ -441,19 +517,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// ── Game screen — confirm move or continue after result ──
 			case "game":
 				switch m.state.Phase {
-				case "pick":
+				case models.PhasePick:
 					// Confirm the card currently under the cursor
 					m.state.PlayerMove = indexToMove(m.state.Cursor)
-					m.state.Phase = "think"
+					m.state.Phase = models.PhaseThink
 					return m, tea.Batch(spinnerTick(), aiThink())
 
-				case "result":
+				case models.PhaseResult:
 					if m.state.Score.PlayerWins == 2 || m.state.Score.OpponentWins == 2 {
 						// Match is over — full reset for a new match
 						m.state.Score = models.MatchScore{Round: 1}
 					}
 					// Reset round state, keep player data and lifetime stats
-					m.state.Phase = "pick"
+					m.state.Phase = models.PhasePick
 					m.state.PlayerMove = models.None
 					m.state.AIMove = models.None
 					m.state.RoundOutcome = ""
@@ -477,14 +553,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(msg.String()) == 1 {
 				char := msg.String()
 
-				if m.state.Screen == "login" {
-					m.state.InputBuffer += char
+				// ? opens help screen — but only on non-input screens
+				// On login/register, ? falls through to normal typing below
+				if char == "?" && m.state.Screen != "login" && m.state.Screen != "register" {
+					// Block during think/reveal phases — animation is running
+					if m.state.Screen != "game" || m.state.Phase == models.PhasePick || m.state.Phase == models.PhaseResult {
+						m.state.PreviousScreen = m.state.Screen
+						m.state.Screen = "help"
+					}
+					return m, nil
 				}
 
+				// Enforce maximum input length across all fields
+				if len(m.state.InputBuffer) >= models.MaxInputLength {
+					return m, nil
+				}
+
+				// Login — only accept valid username characters
+				if m.state.Screen == "login" {
+					r := rune(char[0])
+					if models.IsValidUsernameChar(r) {
+						m.state.InputBuffer += char
+					}
+				}
+
+				// Register — filter characters based on which field is active
 				if m.state.Screen == "register" {
-					m.state.InputBuffer += char
-					if m.state.ActiveField == 3 {
-						m.state.StateSuggestions = models.SuggestStates(m.state.InputBuffer)
+					r := rune(char[0])
+					valid := false
+					switch m.state.ActiveField {
+					case 0, 1: // First Name, Last Name
+						valid = models.IsValidNameChar(r)
+					case 2: // Username
+						valid = models.IsValidUsernameChar(r)
+					case 3: // State
+						valid = models.IsValidStateChar(r)
+					case 4: // Email
+						valid = models.IsValidEmailChar(r)
+					}
+					if valid {
+						m.state.InputBuffer += char
+						if m.state.ActiveField == 3 {
+							m.state.StateSuggestions = models.SuggestStates(m.state.InputBuffer)
+						}
 					}
 				}
 			}
@@ -507,7 +618,7 @@ func menuLength(screen string) int {
 		return 3 // Register, Sign In, Quit
 	case "menu":
 		return 3 // Single Player
-	case "multi-menu":	// Multiplayer, Quit
+	case "multi-menu": // Multiplayer, Quit
 		return 3
 	default:
 		return 0
@@ -552,6 +663,8 @@ func (m model) View() string {
 		return renderQuickMatch(m)
 	case "waiting":
 		return renderQuickMatch(m) // fallback — reuses quick match screen
+	case "help":
+		return renderHelp(m)
 	default:
 		return "\n  Unknown screen\n\n  ctrl+c to quit"
 	}
@@ -577,83 +690,83 @@ func banner(termWidth int) string {
 
 // renderWelcome draws the landing screen with register/login/quit options
 func renderWelcome(m model) string {
-    options := []string{
-        "Register — I am new",
-        "Sign In  — I have an account",
-        "Quit",
-    }
+	options := []string{
+		"Register — I am new",
+		"Sign In  — I have an account",
+		"Quit",
+	}
 
-    // Banner — purple on wide terminals, plain text on narrow
-    s := ui.BannerStyle.Render(banner(m.state.TermWidth)) + "\n"
+	// Banner — purple on wide terminals, plain text on narrow
+	s := ui.BannerStyle.Render(banner(m.state.TermWidth)) + "\n"
 
-    for i, opt := range options {
-        if m.state.Cursor == i {
-            s += ui.SelectedStyle.Render("  > " + opt) + "\n"
-        } else {
-            s += ui.MutedStyle.Render("    " + opt) + "\n"
-        }
-    }
+	for i, opt := range options {
+		if m.state.Cursor == i {
+			s += ui.SelectedStyle.Render("  > "+opt) + "\n"
+		} else {
+			s += ui.MutedStyle.Render("    "+opt) + "\n"
+		}
+	}
 
-    s += "\n" + ui.Footer("↑/↓ to move · Enter to select · ctrl+c to quit")
+	s += "\n" + ui.Footer("↑/↓ to move · Enter to select · ctrl+c to quit")
 
-    if m.state.FormError != "" {
-        s += "\n\n" + ui.ErrorLine(m.state.FormError)
-    }
-    return s
+	if m.state.FormError != "" {
+		s += "\n\n" + ui.ErrorLine(m.state.FormError)
+	}
+	return s
 }
 
-// renderLogin draws the sign-in screen with a live username input
+// renderRegister draws the registration form with five fields
 func renderRegister(m model) string {
-    fields := []string{
-        "First Name",
-        "Last Name ",
-        "Username  ",
-        "State     ",
-        "Email     ",
-    }
-    values := []string{
-        m.state.Player.FirstName,
-        m.state.Player.LastName,
-        m.state.Player.Username,
-        m.state.Player.State,
-        emailDisplay(m.state.Player.Email),
-    }
+	fields := []string{
+		"First Name",
+		"Last Name ",
+		"Username  ",
+		"State     ",
+		"Email     ",
+	}
+	values := []string{
+		m.state.Player.FirstName,
+		m.state.Player.LastName,
+		m.state.Player.Username,
+		m.state.Player.State,
+		emailDisplay(m.state.Player.Email),
+	}
 
-    s := ui.BannerStyle.Render(banner(m.state.TermWidth))
-    s += "\n" + ui.TitleStyle.Render("  REGISTER — Create your account") + "\n\n"
+	s := ui.BannerStyle.Render(banner(m.state.TermWidth))
+	s += "\n" + ui.TitleStyle.Render("  REGISTER — Create your account") + "\n\n"
 
-    for i, field := range fields {
-        if i == m.state.ActiveField {
-            // Active field — purple, bold, cursor
-            s += ui.SelectedStyle.Render("  > "+field+": ") +
-                m.state.InputBuffer + "_\n"
-        } else if values[i] != "" {
-            // Completed field — green checkmark
-            s += ui.MutedStyle.Render("    "+field+": ") +
-                values[i] + " " + ui.Checkmark() + "\n"
-        } else {
-            // Future field — dimmed
-            s += ui.MutedStyle.Render("    "+field+": \n")
-        }
-    }
+	for i, field := range fields {
+		if i == m.state.ActiveField {
+			// Active field — purple, bold, cursor
+			s += ui.SelectedStyle.Render("  > "+field+": ") +
+				m.state.InputBuffer + "_\n"
+		} else if values[i] != "" {
+			// Completed field — green checkmark
+			s += ui.MutedStyle.Render("    "+field+": ") +
+				values[i] + " " + ui.Checkmark() + "\n"
+		} else {
+			// Future field — dimmed
+			s += ui.MutedStyle.Render("    " + field + ": \n")
+		}
+	}
 
-    // Live state suggestions
-    if m.state.ActiveField == 3 && len(m.state.StateSuggestions) > 0 {
-        s += "\n" + ui.InfoStyle.Render("  Suggestions: ")
-        for _, state := range m.state.StateSuggestions {
-            s += ui.DimStyle.Render(state.Name+" ("+state.Abbreviation+")  ")
-        }
-        s += "\n"
-    }
+	// Live state suggestions
+	if m.state.ActiveField == 3 && len(m.state.StateSuggestions) > 0 {
+		s += "\n" + ui.InfoStyle.Render("  Suggestions: ")
+		for _, state := range m.state.StateSuggestions {
+			s += ui.DimStyle.Render(state.Name + " (" + state.Abbreviation + ")  ")
+		}
+		s += "\n"
+	}
 
-    if m.state.FormError != "" {
-        s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
-    }
-    if m.state.ActiveField == 4 {
-        s += "\n" + ui.WarningStyle.Render("  Email is optional — press Enter to skip") + "\n"
-    }
-    s += "\n" + ui.Footer("Enter to confirm field · Esc to go back · ctrl+c to quit")
-    return s
+	if m.state.FormError != "" {
+		s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
+	}
+	if m.state.ActiveField == 4 {
+		s += "\n" + ui.WarningStyle.Render("  Email is optional — press Enter to skip") + "\n"
+	}
+	s += "\n" + ui.Footer("Enter to confirm field · Esc to go back · ctrl+c to quit")
+	return s
 }
 
 // emailDisplay safely dereferences an optional email pointer for display
@@ -665,87 +778,69 @@ func emailDisplay(email *string) string {
 }
 
 func renderLogin(m model) string {
-    s := ui.BannerStyle.Render(banner(m.state.TermWidth))
-    s += "\n" + ui.TitleStyle.Render("  SIGN IN — Enter your username") + "\n\n"
-    s += ui.SelectedStyle.Render("  > Username: ") + m.state.InputBuffer + "_\n"
+	s := ui.BannerStyle.Render(banner(m.state.TermWidth))
+	s += "\n" + ui.TitleStyle.Render("  SIGN IN — Enter your username") + "\n\n"
+	s += ui.SelectedStyle.Render("  > Username: ") + m.state.InputBuffer + "_\n"
 
-    if m.state.FormError != "" {
-        s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
-    }
-    s += "\n" + ui.Footer("Enter to sign in · Esc to go back · ctrl+c to quit")
-    return s
+	if m.state.FormError != "" {
+		s += "\n" + ui.ErrorLine(m.state.FormError) + "\n"
+	}
+	s += "\n" + ui.Footer("Enter to sign in · Esc to go back · ctrl+c to quit")
+	return s
 }
 
 // renderMenu draws the main game menu with a personalised greeting
 func renderMenu(m model) string {
-    options := []string{
-        "Single Player",
-        "Multiplayer",
-        "Quit",
-    }
-    s := "\n" + ui.TitleStyle.Render("  ROPA-SCI") + "\n"
-    s += ui.DimStyle.Render("  Welcome, "+m.state.Player.FirstName+"!") + "\n\n"
+	options := []string{
+		"Single Player",
+		"Multiplayer",
+		"Quit",
+	}
+	s := "\n" + ui.TitleStyle.Render("  ROPA-SCI") + "\n"
+	s += ui.DimStyle.Render("  Welcome, "+m.state.Player.FirstName+"!") + "\n\n"
 
-    for i, option := range options {
-        if m.state.Cursor == i {
-            s += ui.SelectedStyle.Render("  > " + option) + "\n"
-        } else {
-            s += ui.MutedStyle.Render("    " + option) + "\n"
-        }
-    }
-    s += "\n" + ui.Footer("↑/↓ or k/j · Enter to select · Esc to quit")
-    return s
+	for i, option := range options {
+		if m.state.Cursor == i {
+			s += ui.SelectedStyle.Render("  > "+option) + "\n"
+		} else {
+			s += ui.MutedStyle.Render("    "+option) + "\n"
+		}
+	}
+	s += "\n" + ui.Footer("↑/↓ or k/j · Enter to select · Esc to quit")
+	return s
 }
-
 
 // ─── Game Screen ──────────────────────────────────────────────────────────────
 
-// MoveCard returns a 6-line ASCII art card for a given move
-// The card border doubles when selected to give clear visual feedback
-func MoveCard(move models.Move, selected bool) []string {
-	b := "─────────────"
+// MoveCard returns a Lipgloss-styled card string for a given move.
+// Selected cards get a purple double border, normal cards get a grey single border.
+// The emoji sits above the box to avoid double-width alignment issues in terminals.
+func MoveCard(move models.Move, selected bool) string {
+	style := ui.NormalCardStyle
 	if selected {
-		b = "═════════════"
+		style = ui.SelectedCardStyle
 	}
 
-	top := "┌" + b + "┐"
-	bot := "└" + b + "┘"
-
-	cards := map[models.Move][]string{
-		models.Rock: {
-			"       🪨       ", // emoji sits outside the box — no alignment issue
-			top,
-			"│             │",
-			"│    R O C K  │",
-			"│   [ 1 / R ] │",
-			bot,
-		},
-		models.Paper: {
-			"       📄       ",
-			top,
-			"│             │",
-			"│   P A P E R │",
-			"│   [ 2 / P ] │",
-			bot,
-		},
-		models.Scissors: {
-			"       ✂️       ",
-			top,
-			"│             │",
-			"│  S C I S S  │",
-			"│   [ 3 / S ] │",
-			bot,
-		},
-		models.None: {
-			"               ",
-			top,
-			"│   ? ? ? ? ? │",
-			"│   ▓ ▓ ▓ ▓ ▓ │",
-			"│   ? ? ? ? ? │",
-			bot,
-		},
+	type cardInfo struct {
+		emoji   string
+		content string // 3 lines: blank+name+shortcut, or mystery fill
 	}
-	return cards[move]
+
+	cards := map[models.Move]cardInfo{
+		models.Rock:     {"🪨", "\nR O C K\n[ 1 / R ]"},
+		models.Paper:    {"📄", "\nP A P E R\n[ 2 / P ]"},
+		models.Scissors: {"✂️", "\nS C I S S\n[ 3 / S ]"},
+		models.None:     {"", "? ? ? ? ?\n▓ ▓ ▓ ▓ ▓\n? ? ? ? ?"},
+	}
+
+	info := cards[move]
+	card := style.Render(info.content)
+
+	// Emoji above the card; blank line for None to keep all cards the same height
+	if info.emoji != "" {
+		return "      " + info.emoji + "\n" + card
+	}
+	return "\n" + card
 }
 
 // renderGame routes to the correct phase renderer based on current game phase
@@ -757,7 +852,7 @@ func renderGame(m model) string {
 		m.state.Score.OpponentWins,
 	)
 	switch m.state.Phase {
-	case "pick":
+	case models.PhasePick:
 		// Wide terminal — cards side by side
 		if m.state.TermWidth >= 60 {
 			s += renderPick(m)
@@ -765,19 +860,19 @@ func renderGame(m model) string {
 			// Narrow terminal — cards stacked vertically
 			s += renderPickNarrow(m)
 		}
-	case "think":
+	case models.PhaseThink:
 		if m.state.TermWidth >= 60 {
 			s += renderThink(m)
 		} else {
 			s += renderThinkNarrow(m)
 		}
-	case "reveal":
+	case models.PhaseReveal:
 		if m.state.TermWidth >= 60 {
 			s += renderReveal(m)
 		} else {
 			s += renderRevealNarrow(m)
 		}
-	case "result":
+	case models.PhaseResult:
 		s += renderResult(m)
 	}
 	return s
@@ -828,36 +923,27 @@ func renderRevealNarrow(m model) string {
 	return s
 }
 
-// renderPick shows three selectable move cards side by side
+// renderPick shows three selectable move cards side by side using lipgloss.JoinHorizontal
 func renderPick(m model) string {
 	s := "  Choose your move:\n\n"
 	moves := []models.Move{models.Rock, models.Paper, models.Scissors}
-	cards := make([][]string, 3)
+	cards := make([]string, 3)
 	for i, move := range moves {
 		cards[i] = MoveCard(move, m.state.Cursor == i)
 	}
-	// Print all three cards row by row so they sit side by side
-	for row := 0; row < 6; row++ {
-		s += "  "
-		for col := 0; col < 3; col++ {
-			s += cards[col][row] + "  "
-		}
-		s += "\n"
-	}
-	s += "\n  ← → to choose · Enter or 1/2/3 or R/P/S to confirm\n"
-	s += "  Esc to return to menu\n"
+	s += "  " + lipgloss.JoinHorizontal(lipgloss.Top, cards[0], "  ", cards[1], "  ", cards[2]) + "\n"
+	s += "\n" + ui.Footer("← → to choose · Enter or 1/2/3 or R/P/S to confirm") + "\n"
+	s += ui.Footer("Esc to return to menu") + "\n"
 	return s
 }
 
 // renderThink shows the player's locked-in move alongside a face-down AI card
 // The spinner animates to build tension while the AI "decides"
 func renderThink(m model) string {
-	s := "  YOUR MOVE                AI's MOVE\n\n"
-	playerCard := MoveCard(m.state.PlayerMove, false)
-	aiCard := MoveCard(models.None, false)
-	for i := 0; i < 6; i++ {
-		s += "  " + playerCard[i] + "    VS    " + aiCard[i] + "\n"
-	}
+	playerCol := ui.DimStyle.Render("YOUR MOVE") + "\n\n" + MoveCard(m.state.PlayerMove, false)
+	aiCol := ui.DimStyle.Render("AI's MOVE") + "\n\n" + MoveCard(models.None, false)
+
+	s := "\n  " + lipgloss.JoinHorizontal(lipgloss.Center, playerCol, "    VS    ", aiCol) + "\n"
 	spinner := spinnerFrames[m.state.SpinnerFrame]
 	s += "\n  " + spinner + "  AI is calculating its move...\n"
 	return s
@@ -865,54 +951,52 @@ func renderThink(m model) string {
 
 // renderReveal shows both moves side by side before the result appears
 func renderReveal(m model) string {
-	s := "  YOUR MOVE                AI's MOVE\n\n"
-	playerCard := MoveCard(m.state.PlayerMove, false)
-	aiCard := MoveCard(m.state.AIMove, false)
-	for i := 0; i < 6; i++ {
-		s += "  " + playerCard[i] + "    VS    " + aiCard[i] + "\n"
-	}
+	playerCol := ui.DimStyle.Render("YOUR MOVE") + "\n\n" + MoveCard(m.state.PlayerMove, false)
+	aiCol := ui.DimStyle.Render("AI's MOVE") + "\n\n" + MoveCard(m.state.AIMove, false)
+
+	s := "\n  " + lipgloss.JoinHorizontal(lipgloss.Center, playerCol, "    VS    ", aiCol) + "\n"
 	return s
 }
 
 // renderResult shows the round outcome, score bar, and contextual next-step prompt
 func renderResult(m model) string {
-    s := ""
-    var boxContent string
+	s := ""
+	var boxContent string
 
-    switch m.state.RoundOutcome {
-    case "win":
-        s += ui.SuccessStyle.Render("  🏆  YOU WIN THIS ROUND!  🏆") + "\n\n"
-        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
-        s += "  " + ui.WinBoxStyle.Render(boxContent) + "\n"
-    case "lose":
-        s += ui.DangerStyle.Render("  💀  AI WINS THIS ROUND...  💀") + "\n\n"
-        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
-        s += "  " + ui.LoseBoxStyle.Render(boxContent) + "\n"
-    case "tie":
-        s += ui.WarningStyle.Render("  🤝  DRAW!  🤝") + "\n\n"
-        boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
-        s += "  " + ui.TieBoxStyle.Render(boxContent) + "\n"
-    }
+	switch m.state.RoundOutcome {
+	case "win":
+		s += ui.SuccessStyle.Render("  🏆  YOU WIN THIS ROUND!  🏆") + "\n\n"
+		boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+		s += "  " + ui.WinBoxStyle.Render(boxContent) + "\n"
+	case "lose":
+		s += ui.DangerStyle.Render("  💀  AI WINS THIS ROUND...  💀") + "\n\n"
+		boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+		s += "  " + ui.LoseBoxStyle.Render(boxContent) + "\n"
+	case "tie":
+		s += ui.WarningStyle.Render("  🤝  DRAW!  🤝") + "\n\n"
+		boxContent = outcomeMessage(m.state.PlayerMove, m.state.AIMove)
+		s += "  " + ui.TieBoxStyle.Render(boxContent) + "\n"
+	}
 
-    s += "\n  " + scoreBar(m.state.Score.PlayerWins, m.state.Score.OpponentWins) + "\n"
+	s += "\n  " + scoreBar(m.state.Score.PlayerWins, m.state.Score.OpponentWins) + "\n"
 
-    if m.state.Score.PlayerWins == 2 {
-        s += "\n" + ui.SuccessStyle.Render("  🎉🎉  YOU WIN THE MATCH!  🎉🎉") + "\n"
-        s += "\n" + ui.Footer("Enter to play again · Esc for menu")
-    } else if m.state.Score.OpponentWins == 2 {
-        s += "\n" + ui.DangerStyle.Render("  💀  AI wins the match. Better luck next time.") + "\n"
-        s += "\n" + ui.Footer("Enter to play again · Esc for menu")
-    } else {
-        switch m.state.RoundOutcome {
-        case "win":
-            s += "\n" + ui.Footer("Enter for next round · Esc for menu")
-        case "lose":
-            s += "\n" + ui.Footer("Enter to fight back · Esc for menu")
-        case "tie":
-            s += "\n" + ui.Footer("Enter to break the tie · Esc for menu")
-        }
-    }
-    return s
+	if m.state.Score.PlayerWins == 2 {
+		s += "\n" + ui.SuccessStyle.Render("  🎉🎉  YOU WIN THE MATCH!  🎉🎉") + "\n"
+		s += "\n" + ui.Footer("Enter to play again · Esc for menu")
+	} else if m.state.Score.OpponentWins == 2 {
+		s += "\n" + ui.DangerStyle.Render("  💀  AI wins the match. Better luck next time.") + "\n"
+		s += "\n" + ui.Footer("Enter to play again · Esc for menu")
+	} else {
+		switch m.state.RoundOutcome {
+		case "win":
+			s += "\n" + ui.Footer("Enter for next round · Esc for menu")
+		case "lose":
+			s += "\n" + ui.Footer("Enter to fight back · Esc for menu")
+		case "tie":
+			s += "\n" + ui.Footer("Enter to break the tie · Esc for menu")
+		}
+	}
+	return s
 }
 
 // ─── Render Utilities ─────────────────────────────────────────────────────────
@@ -920,15 +1004,15 @@ func renderResult(m model) string {
 // scoreBar renders a visual two-pip progress bar for the current match score
 // e.g.  You: █░  AI: ░░
 func scoreBar(playerWins, aiWins int) string {
-    bar := ui.DimStyle.Render("You: ")
-    for i := 0; i < 2; i++ {
-        bar += ui.ScorePip(i < playerWins)
-    }
-    bar += ui.DimStyle.Render("  AI: ")
-    for i := 0; i < 2; i++ {
-        bar += ui.ScorePip(i < aiWins)
-    }
-    return bar
+	bar := ui.DimStyle.Render("You: ")
+	for i := 0; i < 2; i++ {
+		bar += ui.ScorePip(i < playerWins)
+	}
+	bar += ui.DimStyle.Render("  AI: ")
+	for i := 0; i < 2; i++ {
+		bar += ui.ScorePip(i < aiWins)
+	}
+	return bar
 }
 
 // padCenter centres a string within a fixed width by adding spaces on both sides
@@ -944,45 +1028,91 @@ func padCenter(s string, width int) string {
 
 // renderMultiMenu draws the multiplayer mode selection screen
 func renderMultiMenu(m model) string {
-    options := []string{
-        "Create Room  — get a code to share",
-        "Quick Match  — find any opponent",
-        "Back",
-    }
-    s := "\n" + ui.TitleStyle.Render("  MULTIPLAYER") + "\n\n"
-    s += ui.DimStyle.Render("  Choose how you want to play:") + "\n\n"
-    for i, opt := range options {
-        if m.state.Cursor == i {
-            s += ui.SelectedStyle.Render("  > " + opt) + "\n"
-        } else {
-            s += ui.MutedStyle.Render("    " + opt) + "\n"
-        }
-    }
-    s += "\n" + ui.Footer("↑/↓ to move · Enter to select · Esc for menu")
-    return s
+	options := []string{
+		"Create Room  — get a code to share",
+		"Quick Match  — find any opponent",
+		"Back",
+	}
+	s := "\n" + ui.TitleStyle.Render("  MULTIPLAYER") + "\n\n"
+	s += ui.DimStyle.Render("  Choose how you want to play:") + "\n\n"
+	for i, opt := range options {
+		if m.state.Cursor == i {
+			s += ui.SelectedStyle.Render("  > "+opt) + "\n"
+		} else {
+			s += ui.MutedStyle.Render("    "+opt) + "\n"
+		}
+	}
+	s += "\n" + ui.Footer("↑/↓ to move · Enter to select · Esc for menu")
+	return s
 }
+
 // renderCreateRoom draws the room code waiting screen
 func renderCreateRoom(m model) string {
-    spinner := spinnerFrames[m.state.SpinnerFrame]
-    s := "\n" + ui.TitleStyle.Render("  CREATE ROOM") + "\n\n"
-    roomContent := ui.TitleStyle.Render("Your room code:\n\n") +
-        ui.SuccessStyle.Render("  "+m.state.RoomCode)
-    s += "  " + ui.RoomCodeBoxStyle.Render(roomContent) + "\n"
-    s += "\n" + ui.DimStyle.Render("  Share this code with your opponent.") + "\n"
-    s += "\n" + ui.DimStyle.Render("  "+spinner+"  Waiting for opponent to join...") + "\n"
-    s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
-    return s
+	spinner := spinnerFrames[m.state.SpinnerFrame]
+	s := "\n" + ui.TitleStyle.Render("  CREATE ROOM") + "\n\n"
+	roomContent := ui.TitleStyle.Render("Your room code:\n\n") +
+		ui.SuccessStyle.Render("  "+m.state.RoomCode)
+	s += "  " + ui.RoomCodeBoxStyle.Render(roomContent) + "\n"
+	s += "\n" + ui.DimStyle.Render("  Share this code with your opponent.") + "\n"
+	s += "\n" + ui.DimStyle.Render("  "+spinner+"  Waiting for opponent to join...") + "\n"
+	s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
+	return s
 }
 
 // renderQuickMatch draws the auto matchmaking waiting screen
 func renderQuickMatch(m model) string {
-    spinner := spinnerFrames[m.state.SpinnerFrame]
-    s := "\n" + ui.TitleStyle.Render("  QUICK MATCH") + "\n\n"
-    s += ui.DimStyle.Render("  "+spinner+"  Searching for an opponent...") + "\n\n"
-    waitContent := ui.DimStyle.Render("This may take a moment.\nStay in the terminal!")
-    s += "  " + ui.WaitingBoxStyle.Render(waitContent) + "\n"
-    s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
-    return s
+	spinner := spinnerFrames[m.state.SpinnerFrame]
+	s := "\n" + ui.TitleStyle.Render("  QUICK MATCH") + "\n\n"
+	s += ui.DimStyle.Render("  "+spinner+"  Searching for an opponent...") + "\n\n"
+	waitContent := ui.DimStyle.Render("This may take a moment.\nStay in the terminal!")
+	s += "  " + ui.WaitingBoxStyle.Render(waitContent) + "\n"
+	s += "\n" + ui.Footer("Esc to cancel · ctrl+c to quit")
+	return s
+}
+
+// ─── Help Screen ──────────────────────────────────────────────────────────────
+
+// keybindLine formats a single keybind row: blue key + grey description
+func keybindLine(key, desc string) string {
+	// Pad key column to 16 chars so descriptions align neatly
+	padded := key + strings.Repeat(" ", 16-len(key))
+	if len(key) >= 16 {
+		padded = key + "  "
+	}
+	return ui.InfoStyle.Render(padded) + desc
+}
+
+// renderHelp draws a styled keybind reference card
+func renderHelp(m model) string {
+	s := "\n" + ui.TitleStyle.Render("  HELP — Keyboard Reference") + "\n\n"
+
+	// Build content sections
+	content := ui.SelectedStyle.Render("NAVIGATION") + "\n\n"
+	content += keybindLine("↑ ↓  k j", "Move cursor") + "\n"
+	content += keybindLine("← →  h l", "Select game card") + "\n"
+	content += keybindLine("Enter", "Confirm selection") + "\n"
+	content += keybindLine("Esc", "Go back") + "\n\n"
+
+	content += ui.SelectedStyle.Render("GAME SHORTCUTS") + "\n\n"
+	content += keybindLine("1  or  R", "Rock  \U0001faa8") + "\n"
+	content += keybindLine("2  or  P", "Paper  \U0001f4c4") + "\n"
+	content += keybindLine("3  or  S", "Scissors  \u2702\ufe0f") + "\n\n"
+
+	content += ui.SelectedStyle.Render("GENERAL") + "\n\n"
+	content += keybindLine("?", "Toggle this help") + "\n"
+	content += keybindLine("q", "Quit (not on forms)") + "\n"
+	content += keybindLine("Ctrl+C", "Force quit anywhere")
+
+	// Wrap everything in a rounded purple box
+	helpBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(ui.ColorPrimary)).
+		Padding(1, 3).
+		Render(content)
+
+	s += "  " + helpBox + "\n"
+	s += "\n" + ui.Footer("Esc to go back")
+	return s
 }
 
 // ─── Entry Point ──────────────────────────────────────────────────────────────

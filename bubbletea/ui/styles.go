@@ -102,13 +102,17 @@ var (
 	SelectedCardStyle = lipgloss.NewStyle().
 				Border(lipgloss.DoubleBorder()).
 				BorderForeground(lipgloss.Color(ColorPrimary)).
-				Padding(0, 1)
+				Padding(0, 1).
+				Width(13).
+				Align(lipgloss.Center)
 
 	// NormalCardStyle — game move card when not selected
 	NormalCardStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color(ColorMuted)).
-			Padding(0, 1)
+			Padding(0, 1).
+			Width(13).
+			Align(lipgloss.Center)
 )
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
