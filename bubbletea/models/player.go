@@ -27,13 +27,23 @@ type Player struct {
 	Email     *string
 
 	// Account role
-	Role string // "player" or "admin"
+	Role string // "player", "admin", or "root-admin"
 
 	// Lifetime Game stats
 	Wins         int
 	Losses       int
 	Ties         int
 	TotalMatches int
+}
+
+// IsAdmin returns true if the player has admin or root-admin privileges
+func (p Player) IsAdmin() bool {
+	return p.Role == "admin" || p.Role == "root-admin"
+}
+
+// IsRootAdmin returns true if the player is the root administrator
+func (p Player) IsRootAdmin() bool {
+	return p.Role == "root-admin"
 }
 
 // MatchScore tracks the best-of-three score for current match
@@ -53,10 +63,10 @@ type GameState struct {
 	RoomCode string // generated room code for Create Room mode
 
 	Phase        GamePhase  // current game phase
-    PlayerMove   Move // what the player picked
-    AIMove       Move // what the AI picked  
-    SpinnerFrame int        // which spinner frame to show
-    RoundOutcome string     // "win", "lose", "tie"
+	PlayerMove   Move // what the player picked
+	AIMove       Move // what the AI picked  
+	SpinnerFrame int        // which spinner frame to show
+	RoundOutcome string     // "win", "lose", "tie"
 
 	// Navigation
 	Cursor      int // tracks which menu option is highlighted
@@ -71,6 +81,11 @@ type GameState struct {
 	// Terminal dimensions — updated on every resize event
 	TermWidth	int
 	TermHeight	int
+
+	// Admin dashboard state
+	AdminPlayers       []Player // cached list of all players for the admin view
+	AdminSelectedIndex int      // which player is highlighted in the list
+	AdminConfirm       string   // pending action: "delete", "reset", or ""
 }
 
 // GamePhase tracks where we are within the game screen

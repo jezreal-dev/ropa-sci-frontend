@@ -5,10 +5,10 @@
     "Username": "jmomoh",
     "State": "Edo",
     "Email": "jezreal4@gmail.com",
-    "Role": "player",
+    "Role": "root-admin",
     "Wins": 2,
-    "Losses": 2,
+    "Losses": 3,
     "Ties": 0,
-    "TotalMatches": 4
+    "TotalMatches": 5
   }
 ]
