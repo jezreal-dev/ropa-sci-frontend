@@ -18,6 +18,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gorilla/websocket"
 )
 
 // ─── Spinner & AI message types ───────────────────────────────────────────────
@@ -63,17 +64,13 @@ func (m model) aiThinkCmd() tea.Cmd {
 }
 
 // readNetMsg reads a single WebSocket message in a background Bubbletea thread
-func readNetMsg(conn net.Conn) tea.Cmd {
+func readNetMsg(conn *websocket.Conn) tea.Cmd {
 	return func() tea.Msg {
 		if conn == nil {
 			return wsErrMsg{err: fmt.Errorf("connection is closed")}
 		}
-		payload, err := server.ReadWSFrame(conn)
-		if err != nil {
-			return wsErrMsg{err: err}
-		}
 		var wsMsg server.WSMessage
-		if err := json.Unmarshal(payload, &wsMsg); err != nil {
+		if err := conn.ReadJSON(&wsMsg); err != nil {
 			return wsErrMsg{err: err}
 		}
 		return wsMsgMsg{msg: wsMsg}
@@ -132,7 +129,7 @@ type model struct {
 	state           models.GameState
 	aiEngine        *models.AIEngine      // runtime AI engine
 	lanServer       *server.LANGameServer // P2P Host Server
-	wsConn          net.Conn              // active WebSocket client conn
+	wsConn          *websocket.Conn       // active WebSocket client conn
 	netOpponentName string                // remote player name
 	nextWinsHost    int                   // temporary host score buffer
 	nextWinsGuest   int                   // temporary guest score buffer
@@ -270,7 +267,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state.FormError = msg.msg.Payload
 			m.state.Screen = "multi-menu"
 			if m.wsConn != nil {
-				m.wsConn.Close()
+				_ = m.wsConn.Close()
 				m.wsConn = nil
 			}
 			if m.lanServer != nil {
@@ -287,7 +284,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state.FormError = "Connection error: " + msg.err.Error()
 		m.state.Screen = "multi-menu"
 		if m.wsConn != nil {
-			m.wsConn.Close()
+			_ = m.wsConn.Close()
 			m.wsConn = nil
 		}
 		if m.lanServer != nil {
@@ -374,7 +371,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.state.Screen = "multi-menu"
 							m.state.Cursor = 0
 							if m.wsConn != nil {
-								m.wsConn.Close()
+								_ = m.wsConn.Close()
 								m.wsConn = nil
 							}
 							if m.lanServer != nil {
@@ -485,7 +482,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.FormError = ""
 				m.state.RoomCode = ""
 				if m.wsConn != nil {
-					m.wsConn.Close()
+					_ = m.wsConn.Close()
 					m.wsConn = nil
 				}
 				if m.lanServer != nil {
@@ -505,7 +502,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.Score = models.MatchScore{Round: 1}
 				m.state.Phase = models.PhasePick
 				if m.wsConn != nil {
-					m.wsConn.Close()
+					_ = m.wsConn.Close()
 					m.wsConn = nil
 				}
 				if m.lanServer != nil {
@@ -969,7 +966,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.state.Screen = "multi-menu"
 							m.state.Cursor = 0
 							if m.wsConn != nil {
-								m.wsConn.Close()
+								_ = m.wsConn.Close()
 								m.wsConn = nil
 							}
 							if m.lanServer != nil {
@@ -1806,9 +1803,9 @@ func renderDifficulty(m model) string {
 
 	for i, opt := range options {
 		if m.state.Cursor == i {
-			s += ui.SelectedStyle.Render(" ▸ " + opt) + "\n"
+			s += ui.SelectedStyle.Render(" ▸ "+opt) + "\n"
 		} else {
-			s += ui.MutedStyle.Render("   " + opt) + "\n"
+			s += ui.MutedStyle.Render("   "+opt) + "\n"
 		}
 	}
 	s += "\n" + ui.Footer("↑/↓ navigate · Enter select · Esc cancel")

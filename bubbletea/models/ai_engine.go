@@ -16,11 +16,11 @@ const (
 
 // AIEngine handles prediction calculations and pattern tracking
 type AIEngine struct {
-	Difficulty     AIDifficulty
-	History        []Move                // Sequence of moves the player has chosen
-	TransitionMap  map[Move]map[Move]int // Transition counts: [PrevMove][NextMove]Count
-	lastAIMove     Move
-	rng            *rand.Rand
+	Difficulty    AIDifficulty
+	History       []Move                // Sequence of moves the player has chosen
+	TransitionMap map[Move]map[Move]int // Transition counts: [PrevMove][NextMove]Count
+	lastAIMove    Move
+	rng           *rand.Rand
 }
 
 // NewAIEngine creates a new initialized AI opponent
@@ -30,7 +30,7 @@ func NewAIEngine(difficulty AIDifficulty) *AIEngine {
 		History:       []Move{},
 		TransitionMap: make(map[Move]map[Move]int),
 		lastAIMove:    None,
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:           rand.New(rand.NewSource(time.Now().UnixNano())), // #nosec G404 - game AI does not need crypto RNG
 	}
 }
 

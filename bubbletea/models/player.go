@@ -62,15 +62,15 @@ type GameState struct {
 	GameMode string // handles for "single" & "multi"
 	RoomCode string // generated room code for Create Room mode
 
-	Phase        GamePhase  // current game phase
-	PlayerMove   Move // what the player picked
-	AIMove       Move // what the AI picked  
-	SpinnerFrame int        // which spinner frame to show
-	RoundOutcome string     // "win", "lose", "tie"
+	Phase        GamePhase // current game phase
+	PlayerMove   Move      // what the player picked
+	AIMove       Move      // what the AI picked
+	SpinnerFrame int       // which spinner frame to show
+	RoundOutcome string    // "win", "lose", "tie"
 
 	// Navigation
-	Cursor      int // tracks which menu option is highlighted
-	ActiveField int // This tracks which field is active during registration
+	Cursor         int    // tracks which menu option is highlighted
+	ActiveField    int    // This tracks which field is active during registration
 	PreviousScreen string // tracks where to go back to
 
 	// Form handling
@@ -79,8 +79,8 @@ type GameState struct {
 	StateSuggestions []State
 
 	// Terminal dimensions — updated on every resize event
-	TermWidth	int
-	TermHeight	int
+	TermWidth  int
+	TermHeight int
 
 	// Admin dashboard state
 	AdminPlayers       []Player // cached list of all players for the admin view
@@ -92,8 +92,8 @@ type GameState struct {
 type GamePhase string
 
 const (
-    PhasePick   GamePhase = "pick"    // player choosing
-    PhaseThink  GamePhase = "think"   // AI spinner
-    PhaseReveal GamePhase = "reveal"  // both cards shown
-    PhaseResult GamePhase = "result"  // win/lose/tie shown
+	PhasePick   GamePhase = "pick"   // player choosing
+	PhaseThink  GamePhase = "think"  // AI spinner
+	PhaseReveal GamePhase = "reveal" // both cards shown
+	PhaseResult GamePhase = "result" // win/lose/tie shown
 )
