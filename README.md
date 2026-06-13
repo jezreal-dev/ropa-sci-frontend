@@ -25,7 +25,13 @@ The project is split into two primary CLI client engines:
 
 ## 🚀 How to Run
 
-### Run the Bubble Tea Client
+### Play Immediately (No Installation)
+You do not need to install Go or build the code to play!
+1. Go to the **[Releases](https://github.com/jezreal-dev/ropa-sci-frontend/releases)** page on GitHub.
+2. Download the executable file for your Operating System (e.g., `ropa-sci-windows-amd64.exe`).
+3. Double-click the file to open the terminal game instantly!
+
+### Run from Source (For Developers)
 Navigate to the `bubbletea` folder and run:
 ```bash
 cd bubbletea
