@@ -28,8 +28,12 @@ The project is split into two primary CLI client engines:
 ### Play Immediately (No Installation)
 You do not need to install Go or build the code to play!
 1. Go to the **[Releases](https://github.com/jezreal-dev/ropa-sci-frontend/releases)** page on GitHub.
-2. Download the executable file for your Operating System (e.g., `ropa-sci-windows-amd64.exe`).
-3. Double-click the file to open the terminal game instantly!
+2. Download the correct executable file for your machine:
+   - **Windows:** Download `ropa-sci-windows-amd64.exe`
+   - **Mac (M1/M2/M3 chips):** Download `ropa-sci-macos-arm64`
+   - **Mac (Older Intel chips):** Download `ropa-sci-macos-amd64`
+   - **Linux:** Download `ropa-sci-linux-amd64`
+3. Double-click the file to open the terminal game instantly! (On Mac/Linux, you may need to right-click and select "Open", or run `chmod +x` in the terminal first).
 
 ### Run from Source (For Developers)
 Navigate to the `bubbletea` folder and run:
