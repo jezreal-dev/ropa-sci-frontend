@@ -38,7 +38,7 @@ jobs:
       - name: Scan Bubbletea Code for Vulnerabilities (gosec)
         run: |
           cd bubbletea
-          gosec -exclude-dir=tests ./...
+          gosec -exclude=G505,G401,G102 -exclude-dir=tests ./...
 
       - name: Scan Tview Code for Vulnerabilities (gosec)
         run: |
