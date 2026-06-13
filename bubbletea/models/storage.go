@@ -40,7 +40,7 @@ func SavePlayer(p Player) error {
 	defer dbMutex.Unlock()
 
 	// Create data/ folder first if it doesn't exist
-	if err := os.MkdirAll("data", 0755); err != nil {
+	if err := os.MkdirAll("data", 0750); err != nil {
 		return fmt.Errorf("could not create data folder: %w", err)
 	}
 
@@ -145,7 +145,7 @@ func UpdatePlayer(p Player) error {
 
 // GenerateRoomCode creates a random 4-digit room code
 func GenerateRoomCode() string {
-	digits := rand.Intn(9000) + 1000 // always 4 digits: 1000-9999
+	digits := rand.Intn(9000) + 1000 // #nosec G404 - room codes are not security-critical
 	return fmt.Sprintf("RPS-%d", digits)
 }
 
@@ -212,7 +212,7 @@ func ResetPlayerStats(username string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(dataFile), data, 0644)
+	return os.WriteFile(filepath.Clean(dataFile), data, 0600)
 }
 
 // SetPlayerRole changes the role of a player thread-safely
@@ -243,5 +243,5 @@ func SetPlayerRole(username, role string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(dataFile), data, 0644)
+	return os.WriteFile(filepath.Clean(dataFile), data, 0600)
 }

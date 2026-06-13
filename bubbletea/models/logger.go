@@ -15,12 +15,12 @@ var logFile *os.File
 // Returns a function that closes the log file upon termination.
 func InitLogger() (func(), error) {
 	logDir := "logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
 	logPath := filepath.Join(logDir, "app.log")
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filepath.Clean(logPath), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -38,7 +38,7 @@ func InitLogger() (func(), error) {
 	cleanup := func() {
 		slog.Info("Structured logger shutting down")
 		if logFile != nil {
-			logFile.Close()
+			_ = logFile.Close()
 		}
 	}
 	return cleanup, nil

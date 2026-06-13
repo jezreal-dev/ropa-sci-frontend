@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -92,11 +93,11 @@ func (s *LANGameServer) Stop() {
 
 	s.active = false
 	if s.listener != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 	}
 
 	if s.hostConn != nil {
-		s.hostConn.Close()
+		_ = s.hostConn.Close()
 	}
 	if s.guestConn != nil {
 		_ = s.guestConn.Close()
@@ -232,7 +233,11 @@ func ReadWSFrame(conn net.Conn) ([]byte, error) {
 		if _, err := io.ReadFull(conn, lenBytes); err != nil {
 			return nil, err
 		}
-		payloadLen = int64(binary.BigEndian.Uint64(lenBytes))
+		rawLen := binary.BigEndian.Uint64(lenBytes)
+		if rawLen > math.MaxInt64 {
+			return nil, fmt.Errorf("websocket frame payload too large: %d", rawLen)
+		}
+		payloadLen = int64(rawLen) // #nosec G115 - overflow guarded above
 	}
 
 	var maskKey []byte

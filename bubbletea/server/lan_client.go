@@ -21,7 +21,7 @@ func DialLANServer(addr string) (net.Conn, error) {
 	// Generate a random 16-byte base64 key
 	keyBytes := make([]byte, 16)
 	if _, err := rand.Read(keyBytes); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to generate random secret: %w", err)
 	}
 	secKey := base64.StdEncoding.EncodeToString(keyBytes)
@@ -35,20 +35,20 @@ func DialLANServer(addr string) (net.Conn, error) {
 		"Sec-WebSocket-Version: 13\r\n\r\n", addr, secKey)
 
 	if _, err := conn.Write([]byte(req)); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to send upgrade request: %w", err)
 	}
 
 	// Read upgrade response
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to read upgrade response: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 101 {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("websocket upgrade rejected: status code %d", resp.StatusCode)
 	}
 

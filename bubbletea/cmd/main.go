@@ -270,7 +270,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state.FormError = msg.msg.Payload
 			m.state.Screen = "multi-menu"
 			if m.wsConn != nil {
-				m.wsConn.Close()
+				_ = m.wsConn.Close()
 				m.wsConn = nil
 			}
 			if m.lanServer != nil {
@@ -287,7 +287,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state.FormError = "Connection error: " + msg.err.Error()
 		m.state.Screen = "multi-menu"
 		if m.wsConn != nil {
-			m.wsConn.Close()
+			_ = m.wsConn.Close()
 			m.wsConn = nil
 		}
 		if m.lanServer != nil {
@@ -374,7 +374,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.state.Screen = "multi-menu"
 							m.state.Cursor = 0
 							if m.wsConn != nil {
-								m.wsConn.Close()
+								_ = m.wsConn.Close()
 								m.wsConn = nil
 							}
 							if m.lanServer != nil {
@@ -485,7 +485,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.FormError = ""
 				m.state.RoomCode = ""
 				if m.wsConn != nil {
-					m.wsConn.Close()
+					_ = m.wsConn.Close()
 					m.wsConn = nil
 				}
 				if m.lanServer != nil {
@@ -505,7 +505,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state.Score = models.MatchScore{Round: 1}
 				m.state.Phase = models.PhasePick
 				if m.wsConn != nil {
-					m.wsConn.Close()
+					_ = m.wsConn.Close()
 					m.wsConn = nil
 				}
 				if m.lanServer != nil {
@@ -969,7 +969,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.state.Screen = "multi-menu"
 							m.state.Cursor = 0
 							if m.wsConn != nil {
-								m.wsConn.Close()
+								_ = m.wsConn.Close()
 								m.wsConn = nil
 							}
 							if m.lanServer != nil {
