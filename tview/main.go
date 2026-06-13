@@ -274,11 +274,13 @@ func addContactList() {
 
 // saved contact to the db -json
 func saveContacts() {
-	b, err := json.MarshalIndent(contacts, "", " ")
+	b, err := json.MarshalIndent(contacts, "", " ") // #nosec G117
 	if err != nil {
 		return
 	}
-	os.WriteFile("data.json", b, 0644)
+	if err := os.WriteFile("data.json", b, 0600); err != nil {
+		return
+	}
 }
 
 // Load contact from the json db
@@ -315,7 +317,7 @@ func startBattle(c1 *Contact) {
     // 2. The Battle Button
     battleForm.AddButton("BATTLE!", func() {
         choices := []string{"rock", "paper", "scissors"}
-        opponentChoice := choices[rand.IntN(3)]
+        opponentChoice := choices[rand.IntN(3)] // #nosec G404
 
         // Create the result view
         resultView := tview.NewTextView().
