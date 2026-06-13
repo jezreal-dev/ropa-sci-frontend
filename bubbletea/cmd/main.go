@@ -18,6 +18,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gorilla/websocket"
 )
 
 // ─── Spinner & AI message types ───────────────────────────────────────────────
@@ -63,17 +64,13 @@ func (m model) aiThinkCmd() tea.Cmd {
 }
 
 // readNetMsg reads a single WebSocket message in a background Bubbletea thread
-func readNetMsg(conn net.Conn) tea.Cmd {
+func readNetMsg(conn *websocket.Conn) tea.Cmd {
 	return func() tea.Msg {
 		if conn == nil {
 			return wsErrMsg{err: fmt.Errorf("connection is closed")}
 		}
-		payload, err := server.ReadWSFrame(conn)
-		if err != nil {
-			return wsErrMsg{err: err}
-		}
 		var wsMsg server.WSMessage
-		if err := json.Unmarshal(payload, &wsMsg); err != nil {
+		if err := conn.ReadJSON(&wsMsg); err != nil {
 			return wsErrMsg{err: err}
 		}
 		return wsMsgMsg{msg: wsMsg}
@@ -132,7 +129,7 @@ type model struct {
 	state           models.GameState
 	aiEngine        *models.AIEngine      // runtime AI engine
 	lanServer       *server.LANGameServer // P2P Host Server
-	wsConn          net.Conn              // active WebSocket client conn
+	wsConn          *websocket.Conn       // active WebSocket client conn
 	netOpponentName string                // remote player name
 	nextWinsHost    int                   // temporary host score buffer
 	nextWinsGuest   int                   // temporary guest score buffer
