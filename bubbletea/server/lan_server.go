@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -86,8 +87,8 @@ func (s *LANGameServer) Start(requestedPort int) (int, error) {
 	addr := fmt.Sprintf(":%d", requestedPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		// If requested port is busy, fallback to dynamic port assignment
-		listener, err = net.Listen("tcp", ":0")
+	// If requested port is busy, fallback to dynamic port assignment
+		listener, err = net.Listen("tcp", ":0") // #nosec G102 - Intentional bind to all interfaces for LAN multiplayer hosting
 		if err != nil {
 			return 0, fmt.Errorf("failed to bind TCP listener: %w", err)
 		}
@@ -99,7 +100,10 @@ func (s *LANGameServer) Start(requestedPort int) (int, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.wsHandler)
-	s.server = &http.Server{Handler: mux}
+	s.server = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second, // Mitigate Slowloris attacks (G112)
+	}
 
 	slog.Info("LAN P2P Server started successfully", "port", s.port)
 
