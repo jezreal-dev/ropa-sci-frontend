@@ -14,12 +14,18 @@ func asciiColor(text string, substring string, color string) strings.Builder {
 	tag := "[white]"
 
 	switch color {
-	case "red": tag = "[red]"
-	case "green": tag = "[green]"
-	case "yellow": tag = "[yellow]"
-	case "blue": tag = "[blue]"
-	case "magenta": tag = "[magenta]"
-	case "cyan": tag = "[cyan]"
+	case "red":
+		tag = "[red]"
+	case "green":
+		tag = "[green]"
+	case "yellow":
+		tag = "[yellow]"
+	case "blue":
+		tag = "[blue]"
+	case "magenta":
+		tag = "[magenta]"
+	case "cyan":
+		tag = "[cyan]"
 	}
 
 	data, err := os.ReadFile("standard.txt")
@@ -54,4 +60,3 @@ func asciiColor(text string, substring string, color string) strings.Builder {
 	}
 	return outputBuilder
 }
-

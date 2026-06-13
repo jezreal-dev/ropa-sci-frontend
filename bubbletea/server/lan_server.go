@@ -87,7 +87,7 @@ func (s *LANGameServer) Start(requestedPort int) (int, error) {
 	addr := fmt.Sprintf(":%d", requestedPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-	// If requested port is busy, fallback to dynamic port assignment
+		// If requested port is busy, fallback to dynamic port assignment
 		listener, err = net.Listen("tcp", ":0") // #nosec G102 - Intentional bind to all interfaces for LAN multiplayer hosting
 		if err != nil {
 			return 0, fmt.Errorf("failed to bind TCP listener: %w", err)

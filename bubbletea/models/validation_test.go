@@ -116,7 +116,7 @@ func TestValidateUsername(t *testing.T) {
 		{"john_doe-12", ""},
 		{"bo", "Username must be at least 3 characters"}, // Below min boundary
 		{"", "Username must be at least 3 characters"},
-		{"abcdefghijklmnopqrstuv", "Username must be 20 characters or less"}, // Above max boundary (22 chars)
+		{"abcdefghijklmnopqrstuv", "Username must be 20 characters or less"},      // Above max boundary (22 chars)
 		{"John_doe", "Only lowercase letters, numbers, underscores, and hyphens"}, // Uppercase not allowed
 		{"john doe", "Only lowercase letters, numbers, underscores, and hyphens"},
 	}

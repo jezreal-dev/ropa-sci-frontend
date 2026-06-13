@@ -16,11 +16,11 @@ const (
 
 // AIEngine handles prediction calculations and pattern tracking
 type AIEngine struct {
-	Difficulty     AIDifficulty
-	History        []Move                // Sequence of moves the player has chosen
-	TransitionMap  map[Move]map[Move]int // Transition counts: [PrevMove][NextMove]Count
-	lastAIMove     Move
-	rng            *rand.Rand
+	Difficulty    AIDifficulty
+	History       []Move                // Sequence of moves the player has chosen
+	TransitionMap map[Move]map[Move]int // Transition counts: [PrevMove][NextMove]Count
+	lastAIMove    Move
+	rng           *rand.Rand
 }
 
 // NewAIEngine creates a new initialized AI opponent

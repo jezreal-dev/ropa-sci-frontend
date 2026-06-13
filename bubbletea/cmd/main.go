@@ -1803,9 +1803,9 @@ func renderDifficulty(m model) string {
 
 	for i, opt := range options {
 		if m.state.Cursor == i {
-			s += ui.SelectedStyle.Render(" ▸ " + opt) + "\n"
+			s += ui.SelectedStyle.Render(" ▸ "+opt) + "\n"
 		} else {
-			s += ui.MutedStyle.Render("   " + opt) + "\n"
+			s += ui.MutedStyle.Render("   "+opt) + "\n"
 		}
 	}
 	s += "\n" + ui.Footer("↑/↓ navigate · Enter select · Esc cancel")
