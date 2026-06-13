@@ -1,0 +1,92 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "feature/*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security-audit:
+    name: Cybersecurity SAST & Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Install Vulnerability & Security Scanner Tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Audit Bubbletea Dependencies
+        run: |
+          cd bubbletea
+          govulncheck ./...
+
+      - name: Audit Tview Dependencies
+        run: |
+          cd tview
+          govulncheck ./...
+
+      - name: Scan Bubbletea Code for Vulnerabilities (gosec)
+        run: |
+          cd bubbletea
+          # Exclude test files from security scan
+          gosec -exclude-dir=tests ./...
+
+      - name: Scan Tview Code for Vulnerabilities (gosec)
+        run: |
+          cd tview
+          gosec ./...
+
+  build-and-test:
+    name: Cross-Platform Build & Verification
+    needs: security-audit
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        module: [ bubbletea, tview ]
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Install Dependencies
+        run: |
+          cd ${{ matrix.module }}
+          go mod tidy
+
+      - name: Verify Formatting (gofmt)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd ${{ matrix.module }}
+          diff -u <(echo -n) <(gofmt -d .)
+
+      - name: Run Static Analysis (go vet)
+        run: |
+          cd ${{ matrix.module }}
+          go vet ./...
+
+      - name: Execute Test Suite
+        run: |
+          cd ${{ matrix.module }}
+          go test -v -race ./...
+
+      - name: Test Build compilation
+        run: |
+          cd ${{ matrix.module }}
+          go build -v -o ropa-sci-test-build ./...
