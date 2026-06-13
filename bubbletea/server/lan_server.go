@@ -2,7 +2,7 @@ package server
 
 import (
 	"bufio"
-	"crypto/sha1"
+	"crypto/sha1" /* #nosec G505 - required by RFC 6455 for WebSocket handshake */
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -60,10 +60,10 @@ func (s *LANGameServer) Start(requestedPort int) (int, error) {
 	defer s.mu.Unlock()
 
 	addr := fmt.Sprintf("0.0.0.0:%d", requestedPort)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", addr) // #nosec G102 - LAN server intended to accept network connections
 	if err != nil {
 		// If requested port is busy, fallback to dynamic port assignment
-		listener, err = net.Listen("tcp", "0.0.0.0:0")
+		listener, err = net.Listen("tcp", "0.0.0.0:0") // #nosec G102 - LAN server intended to accept network connections
 		if err != nil {
 			return 0, fmt.Errorf("failed to bind TCP listener: %w", err)
 		}
@@ -99,7 +99,7 @@ func (s *LANGameServer) Stop() {
 		s.hostConn.Close()
 	}
 	if s.guestConn != nil {
-		s.guestConn.Close()
+		_ = s.guestConn.Close()
 	}
 
 	slog.Info("LAN P2P Server stopped")
@@ -134,7 +134,7 @@ func (s *LANGameServer) listenLoop() {
 			// Reject third wheels
 			s.mu.Unlock()
 			slog.Warn("Rejecting third-wheel connection request")
-			conn.Close()
+			_ = conn.Close()
 		}
 	}
 }
@@ -164,7 +164,7 @@ func (s *LANGameServer) handleConnection(conn net.Conn, isHost bool) {
 
 	// Calculate Accept Key (RFC 6455)
 	const wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	acceptHash := sha1.Sum([]byte(key + wsGUID))
+	acceptHash := sha1.Sum([]byte(key + wsGUID)) // #nosec G401 - required by RFC 6455
 	acceptKey := base64.StdEncoding.EncodeToString(acceptHash[:])
 
 	// Send Handshake Response

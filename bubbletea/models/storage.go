@@ -66,7 +66,7 @@ func SavePlayer(p Player) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(dataFile), data, 0644)
+	return os.WriteFile(filepath.Clean(dataFile), data, 0600)
 }
 
 // LoadPlayers reads all players from disk thread-safely
@@ -140,7 +140,7 @@ func UpdatePlayer(p Player) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(dataFile), data, 0644)
+	return os.WriteFile(filepath.Clean(dataFile), data, 0600)
 }
 
 // GenerateRoomCode creates a random 4-digit room code
@@ -178,7 +178,7 @@ func DeletePlayer(username string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(dataFile), data, 0644)
+	return os.WriteFile(filepath.Clean(dataFile), data, 0600)
 }
 
 // ResetPlayerStats zeroes W/L/T/TotalMatches for a player thread-safely
